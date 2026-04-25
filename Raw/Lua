@@ -1,0 +1,160 @@
+# Tusspeedglicht
+Rah
+local Player = game.Players.LocalPlayer
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+
+-- --- 1. GIAO DIỆN (35x35) ---
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "SpeedGlitch_GodMode"
+ScreenGui.ResetOnSpawn = false -- QUAN TRỌNG: Giữ GUI khi chết
+ScreenGui.Parent = Player:WaitForChild("PlayerGui")
+
+local MainButton = Instance.new("TextButton")
+MainButton.Size = UDim2.new(0, 35, 0, 35)
+MainButton.Position = UDim2.new(0.5, -17, 0.5, -17)
+MainButton.BackgroundColor3 = Color3.fromRGB(0, 120, 255)
+MainButton.BackgroundTransparency = 0.7 
+MainButton.Text = ""
+MainButton.Parent = ScreenGui
+
+local UICorner = Instance.new("UICorner")
+UICorner.CornerRadius = UDim.new(1, 0)
+UICorner.Parent = MainButton
+
+local UIStroke = Instance.new("UIStroke")
+UIStroke.Color = Color3.fromRGB(150, 230, 255)
+UIStroke.Thickness = 2
+UIStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+UIStroke.Parent = MainButton
+
+-- Menu
+local MenuFrame = Instance.new("Frame")
+MenuFrame.Size = UDim2.new(0, 130, 0, 110)
+MenuFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+MenuFrame.Visible = false
+MenuFrame.Parent = ScreenGui
+
+local TextBox = Instance.new("TextBox")
+TextBox.Size = UDim2.new(0.8, 0, 0, 30)
+TextBox.Position = UDim2.new(0.1, 0, 0.3, 0)
+TextBox.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+TextBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+TextBox.Font = Enum.Font.Arcade
+TextBox.PlaceholderText = "1-5000"
+TextBox.Text = ""
+TextBox.Parent = MenuFrame
+
+local OkButton = Instance.new("TextButton")
+OkButton.Size = UDim2.new(0.6, 0, 0, 25)
+OkButton.Position = UDim2.new(0.2, 0, 0.7, 0)
+OkButton.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
+OkButton.Text = "OK"
+OkButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+OkButton.Font = Enum.Font.Arcade
+OkButton.Parent = MenuFrame
+
+-- --- 2. LOGIC BIẾN SỐ TOÀN CỤC ---
+local multiplier = 16
+local speedEnabled = false
+local isHolding = false
+local holdStart = 0
+
+-- Cập nhật Character mỗi khi Spawn
+local Character = Player.Character or Player.CharacterAdded:Wait()
+local Humanoid = Character:WaitForChild("Humanoid")
+local RootPart = Character:WaitForChild("HumanoidRootPart")
+
+Player.CharacterAdded:Connect(function(newChar)
+	Character = newChar
+	Humanoid = Character:WaitForChild("Humanoid")
+	RootPart = Character:WaitForChild("HumanoidRootPart")
+end)
+
+-- Hàm kiểm tra va chạm nâng cao (Phanh giảm dần)
+local function GetSpeedScale(velocity)
+	local rayOrigin = RootPart.Position
+	local rayDir = velocity * 0.1 -- Nhìn trước 0.1s
+	
+	local rayParams = RaycastParams.new()
+	rayParams.FilterDescendantsInstances = {Character}
+	
+	local result = workspace:Raycast(rayOrigin, rayDir, rayParams)
+	
+	if result then
+		local distance = (result.Position - rayOrigin).Magnitude
+		-- Nếu khoảng cách < 10 studs, bắt đầu giảm tốc dần
+		local scale = math.clamp((distance - 2) / 8, 0, 1) 
+		return scale
+	end
+	return 1
+end
+
+-- --- 3. VÒNG LẶP CHÍNH ---
+RunService.Heartbeat:Connect(function()
+	if speedEnabled and Character and RootPart and Humanoid then
+		if Humanoid.FloorMaterial == Enum.Material.Air then
+			local moveDir = Humanoid.MoveDirection
+			if moveDir.Magnitude > 0 then
+				local baseVel = Vector3.new(moveDir.X * multiplier, RootPart.AssemblyLinearVelocity.Y, moveDir.Z * multiplier)
+				
+				-- Áp dụng phanh giảm dần
+				local scale = GetSpeedScale(baseVel)
+				RootPart.AssemblyLinearVelocity = Vector3.new(baseVel.X * scale, baseVel.Y, baseVel.Z * scale)
+			end
+		end
+	end
+end)
+
+-- --- 4. HỆ THỐNG EVENT ---
+MainButton.MouseButton1Down:Connect(function()
+	isHolding = true
+	holdStart = tick()
+	task.wait(2)
+	if isHolding and (tick() - holdStart >= 2) then
+		MenuFrame.Visible = true
+		MenuFrame.Position = UDim2.new(MainButton.Position.X.Scale, MainButton.Position.X.Offset - 50, MainButton.Position.Y.Scale, MainButton.Position.Y.Offset + 45)
+	end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		isHolding = false
+	end
+end)
+
+MainButton.MouseButton1Click:Connect(function()
+	if tick() - holdStart < 0.5 then
+		speedEnabled = not speedEnabled
+		MainButton.BackgroundTransparency = speedEnabled and 0.1 or 0.7
+	end
+end)
+
+OkButton.MouseButton1Click:Connect(function()
+	multiplier = tonumber(TextBox.Text) or 16
+	multiplier = math.clamp(multiplier, 1, 5000)
+	speedEnabled = true
+	MainButton.BackgroundTransparency = 0.1
+	MenuFrame.Visible = false
+end)
+
+-- Kéo thả nút (Drag)
+local dragging, dragInput, dragStart, startPos
+MainButton.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		dragging = true
+		dragStart = input.Position
+		startPos = MainButton.Position
+	end
+end)
+UserInputService.InputChanged:Connect(function(input)
+	if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+		local delta = input.Position - dragStart
+		MainButton.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+	end
+end)
+MainButton.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		dragging = false
+	end
+end)
